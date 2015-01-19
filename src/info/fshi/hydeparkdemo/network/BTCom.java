@@ -39,6 +39,7 @@ public class BTCom {
 	public final static int BT_DATA = 10403;
 	public final static int BT_CLIENT_ALREADY_CONNECTED = 10405;
 	public final static int BT_DISCONNECTED = 10406;
+	public final static int BT_SUCCESS = 10407;
 	public final static String BT_DATA_CONTENT = "bt_data"; // data received from another device
 	public final static String BT_DEVICE_MAC = "bt_device_mac"; // mac address of the communicating device
 
@@ -266,7 +267,7 @@ public class BTCom {
 		private final BluetoothDevice mBTDevice;
 		private long timeout;
 		private boolean clientConnected = false;
-		private StringBuffer sb;
+		private StringBuffer lock;
 
 		public ClientThread(BluetoothDevice device, StringBuffer sb, UUID uuid, long timeout) {
 			// Use a temporary object that is later assigned to mmSocket,
@@ -274,7 +275,7 @@ public class BTCom {
 			this.timeout = timeout;
 			BluetoothSocket tmp = null;
 			mBTDevice = device;
-			this.sb=sb;
+			this.lock=sb;
 
 			// Get a BluetoothSocket to connect with the given BluetoothDevice
 			try {
@@ -301,7 +302,7 @@ public class BTCom {
 					}
 				}
 				if(!connExisted){
-					synchronized (sb){
+					synchronized (lock){
 						timeoutHandler.postDelayed(new Runnable() {
 							@Override
 							public void run() {
@@ -412,7 +413,8 @@ public class BTCom {
 		private final BluetoothSocket mConnectedSocket;
 		private final InputStream mmInStream;
 		private final OutputStream mmOutStream;
-
+		private boolean isCancelled = false;
+		
 		public ConnectedThread(BluetoothSocket socket) {
 			mConnectedSocket = socket;
 			InputStream tmpIn = null;
@@ -462,13 +464,14 @@ public class BTCom {
 					}
 				} catch (IOException e) {
 					e.printStackTrace();
-					// remove the connection
-					stopConnection(getMac());
 					// send message to update UI
 					try {
 						Message msg=Message.obtain();
 						Bundle b = new Bundle();
-						msg.what = BT_DISCONNECTED;
+						if(isCancelled)
+							msg.what = BT_SUCCESS;
+						else
+							msg.what = BT_DISCONNECTED;
 						b.putString(BT_DEVICE_MAC, this.getMac());
 						msg.setData(b);
 						mMessenger.send(msg);
@@ -476,6 +479,8 @@ public class BTCom {
 						// TODO Auto-generated catch block
 						e1.printStackTrace();
 					}
+					// remove the connection
+					stopConnection(getMac());
 					break;
 					// stop the connected thread
 				} catch (ClassNotFoundException e1) {
@@ -515,6 +520,7 @@ public class BTCom {
 
 		/* Call this from the main activity to shutdown the connection */
 		public void cancel() {
+			isCancelled = true;
 			try {
 				mmInStream.close();
 				mmOutStream.close();

@@ -15,11 +15,11 @@ public class DeviceInfo extends Dialog{
 		TextView rssi = (TextView) findViewById(R.id.device_info_rssi);
 		TextView message = (TextView) findViewById(R.id.device_info_message);
 		if(name != null)
-			name.setText(device.btDevice.name);
-		mac.setText(device.btDevice.btRawDevice.getAddress());
-		rssi.setText(String.valueOf(device.btDevice.rssi) + "dBm");
+			name.setText(device.name);
+		mac.setText(device.btRawDevice.getAddress());
+		rssi.setText(String.valueOf(device.rssi) + "dBm");
 		if(message != null)
-			message.setText(device.btDevice.message);
+			message.setText(device.message);
 	}
 
 }

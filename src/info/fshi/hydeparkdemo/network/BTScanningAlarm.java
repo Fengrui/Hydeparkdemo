@@ -22,8 +22,6 @@ public class BTScanningAlarm extends BroadcastReceiver {
 
 	private static long interval;
 
-	private Context mContext;
-	
 	private static BTController mBTController = null;
 	
 	/**
@@ -36,7 +34,6 @@ public class BTScanningAlarm extends BroadcastReceiver {
 	 */
 
 	public BTScanningAlarm(Context context, BTController btController) {          
-		mContext = context;
 		// init bt controller
 		mBTController = btController;
 		

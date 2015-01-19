@@ -7,8 +7,6 @@ public abstract class BasicPacket {
 	public static final String PACKET_DATA = "data";
 	
 	// data type identifier
-	public static final int PACKET_TYPE_SENSOR_REQUEST = 100;
-	public static final int PACKET_TYPE_SENSOR_READING = 101;
-	public static final int PACKET_TYPE_SENSOR_READING_ACK = 102;
+	public static final int PACKET_TYPE_QUEUE_SIZE = 100;
 	
 }

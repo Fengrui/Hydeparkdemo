@@ -25,7 +25,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	ArrayList<Device> deviceList = new ArrayList<Device>();
 
 	private static final String TAG = "Device ListAdapter";
-	
+
 	public DeviceListAdapter(Context context, int layoutResourceId, ArrayList<Device> deviceList) {
 
 		super(context, layoutResourceId, deviceList);
@@ -47,7 +47,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 		@Override
 		public int compare(Device lhs, Device rhs) {
 			// TODO Auto-generated method stub
-			return lhs.btDevice.connState - rhs.btDevice.connState;
+			return lhs.connState - rhs.connState;
 		}
 	}
 
@@ -58,16 +58,16 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	public ArrayList<Device> getConnectableDevices(){
 		ArrayList<Device> connectableDevices = new ArrayList<Device>();
 		for(Device device : deviceList){
-			if(device.btDevice.isConnectable()){
-				if(device.btDevice.connState == Constants.STATE_CLIENT_CONNECTED || device.btDevice.connState == Constants.STATE_CLIENT_UNCONNECTED){
-					connectableDevices.add(device);
-				}
+
+			if(device.connState == Constants.STATE_CLIENT_CONNECTED || device.connState == Constants.STATE_CLIENT_UNCONNECTED){
+				connectableDevices.add(device);
 			}
+
 		}
 		Log.d(TAG, "# of connectable devices " + String.valueOf(connectableDevices.size()));
 		return connectableDevices;
 	}
-	
+
 	/** 
 	 * get a device using mac
 	 * @param mac
@@ -76,7 +76,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	public Device getDevice(String mac){
 		return deviceList.get(deviceIndex(mac));
 	}
-	
+
 	/**
 	 * return the index of a device, -1 if not contains
 	 * @param deviceMac
@@ -85,13 +85,13 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	public int deviceIndex(String deviceMac){
 		int deviceIndex = -1;
 		for(int i=0; i < deviceList.size(); i++){
-			if (deviceList.get(i).btDevice.btRawDevice.getAddress().equalsIgnoreCase(deviceMac)){
+			if (deviceList.get(i).btRawDevice.getAddress().equalsIgnoreCase(deviceMac)){
 				deviceIndex = i;
 			}
 		}
 		return deviceIndex;
 	}
-	
+
 	public void sortList(){
 		Collections.sort(deviceList, new DeviceConnStateComparator());
 	}
@@ -106,19 +106,8 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	}
 
 	public boolean canRetry(String mac){
-		deviceList.get(deviceIndex(mac)).btDevice.decRetryCounter();
-		return deviceList.get(deviceIndex(mac)).btDevice.retryCounter > 0;
-	}
-	/**
-	 * if backoff true, back off the next possible connection
-	 * @param mac
-	 * @param backoff
-	 */
-	public void updateRetryBackoff(String mac, boolean backoff){
-		int index = deviceIndex(mac);
-		if(index >= 0){
-			deviceList.get(index).btDevice.updateRetryBackoff(backoff);
-		}
+		deviceList.get(deviceIndex(mac)).decRetryCounter();
+		return deviceList.get(deviceIndex(mac)).retryCounter > 0;
 	}
 
 	/**
@@ -129,10 +118,10 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	public void setDeviceMessage(String mac, String message){
 		int index = deviceIndex(mac);
 		if(index >= 0){
-			deviceList.get(deviceIndex(mac)).btDevice.message = message;
+			deviceList.get(deviceIndex(mac)).message = message;
 		}
 	}
-	
+
 	/**
 	 * set device action
 	 * @param mac
@@ -145,7 +134,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 			state = Constants.STATE_CLIENT_CONNECTED;
 			break;
 		case BTCom.BT_SERVER_CONNECTED:
-			state = Constants.STATE_CLIENT_CONNECTED;
+			state = Constants.STATE_SERVER_CONNECTED;
 			break;
 		case BTCom.BT_CLIENT_CONNECT_FAILED:
 			state = Constants.STATE_CLIENT_FAILED;
@@ -153,16 +142,19 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 		case BTCom.BT_DISCONNECTED:
 			state = Constants.STATE_CLIENT_DISCONNECTED;
 			break;
-//		case BasicPacket.PACKET_TYPE_TIMESTAMP_ACK:
-//			state = Constants.STATE_CLIENT_CONNECTED;
-//			break;
+		case BTCom.BT_SUCCESS:
+			state = Constants.STATE_CONNECT_SUCCESS;
+			break;
+			//		case BasicPacket.PACKET_TYPE_TIMESTAMP_ACK:
+			//			state = Constants.STATE_CLIENT_CONNECTED;
+			//			break;
 		default:
 			break;
 		}
 		if(state != 0){
 			int index = deviceIndex(mac);
 			if(index >= 0){
-				deviceList.get(deviceIndex(mac)).btDevice.connState = state;
+				deviceList.get(deviceIndex(mac)).connState = state;
 				Collections.sort(deviceList, new DeviceConnStateComparator());
 			}
 		}
@@ -182,6 +174,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 
 			holder.deviceMac = (TextView)row.findViewById(R.id.device_mac);
 			holder.deviceName = (TextView)row.findViewById(R.id.device_name);
+			holder.deviceType = (TextView)row.findViewById(R.id.device_type);
 			holder.deviceRssi = (TextView)row.findViewById(R.id.device_rssi);
 			holder.deviceSignal = (ImageView) row.findViewById(R.id.signal_strength);
 			holder.deviceConnect = (Button) row.findViewById(R.id.device_connect);
@@ -195,11 +188,19 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 
 		Device device = deviceList.get(position);
 
-		holder.deviceMac.setText(device.btDevice.btRawDevice.getAddress());
-		if(device.btDevice.name!= null){
-			holder.deviceName.setText(device.btDevice.name);
+		holder.deviceMac.setText(device.btRawDevice.getAddress());
+		if(device.name!= null){
+			holder.deviceName.setText(device.name);
 		}
-		short rssi = device.btDevice.rssi;
+		if(DeviceList.devices.get(device.btRawDevice.getAddress()) == DeviceList.DEVICE_TYPE_RELAY){
+			holder.deviceType.setText("R");
+		} else if(DeviceList.devices.get(device.btRawDevice.getAddress()) == DeviceList.DEVICE_TYPE_SENSOR)	{
+			holder.deviceType.setText("S");
+		} else if(DeviceList.devices.get(device.btRawDevice.getAddress()) == DeviceList.DEVICE_TYPE_SINK){
+			holder.deviceType.setText("K");
+		}
+
+		short rssi = device.rssi;
 		holder.deviceRssi.setText(String.valueOf(rssi) + "dBm");
 		/*
 		 * -30dBm = Awesome
@@ -220,8 +221,12 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 		}
 		holder.deviceConnect.setEnabled(true);
 		holder.deviceConnect.setTextColor(Color.WHITE);
-		switch(device.btDevice.connState){
+		switch(device.connState){
 		case Constants.STATE_CLIENT_CONNECTED:
+			holder.deviceConnect.setBackgroundResource(R.drawable.connected_button);
+			holder.deviceConnect.setText(Constants.STATE_CONNECTED);
+			break;
+		case Constants.STATE_SERVER_CONNECTED:
 			holder.deviceConnect.setBackgroundResource(R.drawable.connected_button);
 			holder.deviceConnect.setText(Constants.STATE_CONNECTED);
 			break;
@@ -237,6 +242,10 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 			holder.deviceConnect.setBackgroundResource(R.drawable.connect_button);
 			holder.deviceConnect.setText(Constants.STATE_NOT_CONNECTED);
 			break;
+		case Constants.STATE_CONNECT_SUCCESS:
+			holder.deviceConnect.setBackgroundResource(R.drawable.connected_button);
+			holder.deviceConnect.setText(Constants.STATE_SUCCESS);
+			break;
 		case Constants.STATE_CLIENT_OUTDATED:
 			holder.deviceConnect.setBackgroundResource(R.drawable.connect_outdated_button);
 			holder.deviceConnect.setText(Constants.STATE_NOT_CONNECTED);
@@ -247,7 +256,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 			break;
 
 		}
-		holder.deviceConnect.setOnClickListener(device.btDevice.btConnect);
+		holder.deviceConnect.setOnClickListener(device.btConnect);
 
 		return row;
 	}
@@ -255,6 +264,7 @@ public class DeviceListAdapter extends ArrayAdapter<Device> {
 	static class DeviceHolder
 	{
 		TextView deviceName;
+		TextView deviceType;
 		TextView deviceMac;
 		TextView deviceRssi;
 		ImageView deviceSignal;

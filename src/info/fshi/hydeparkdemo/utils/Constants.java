@@ -4,6 +4,20 @@ import info.fshi.hydeparkdemo.R;
 
 
 public abstract class Constants {
+	
+	public static final boolean DEBUG = true;
+	public static final int INIT_QUEUE_SIZE = 8000000;
+	
+	public static final long WEB_LOCATION_REPORT_INTERVAL = 60000;
+	
+	public static final double LOCATION_UPDATE_SENSITIVITY = 0.00001;
+	
+	public static final String WEB_SERVER_ADDR = "http://hydeparkdemo.herokuapp.com/";
+	public static final String WEB_SERVER_TX_ADDR = "http://hydeparkdemo.herokuapp.com/tx";
+	public static final String WEB_SERVER_LOC_ADDR = "http://hydeparkdemo.herokuapp.com/loc";
+	public static final String WEB_SERVER_DEVICELIST_ADDR = "http://hydeparkdemo.herokuapp.com/devicelist";
+	public static final String WEB_SERVER_TYPELIST_ADDR = "http://hydeparkdemo.herokuapp.com/typelist";
+	
 	public static final String STR_APPLICATION_NAME = "DataMule";
 	public static final String TAG_APPLICATION = "DataMule";
 	public static final String TAG_ACT_TEST = "ActivityTest";
@@ -23,7 +37,7 @@ public abstract class Constants {
 	
 	// BT meta
 	public static final int BT_CLIENT_TIMEOUT = 3000;
-	public static final int BT_CONN_MAX_RETRY = 2;
+	public static final int BT_CONN_MAX_RETRY = 3;
 	public static final int BT_RETRY_BACK_OFF = 30000;
 	
 	// BT activity intent extra name
@@ -31,17 +45,20 @@ public abstract class Constants {
 	
 	// BT client and server state in listview, start from 200
 	public static final int STATE_CLIENT_CONNECTED = 201;
+	public static final int STATE_SERVER_CONNECTED = 2010;
 	public static final int STATE_CLIENT_UNCONNECTED = 202;
 	public static final int STATE_CLIENT_FAILED = 203;
 	public static final int STATE_CLIENT_DISCONNECTED = 205;
 	public static final int STATE_CLIENT_OUTDATED = 206;
+	public static final int STATE_CONNECT_SUCCESS = 207;
 	
 	
 	// String, upper case
-	public static final String STATE_CONNECTED = "SUCCESS";
+	public static final String STATE_CONNECTED = "CONNECTED";
 	public static final String STATE_CONNECTION_FAILED = "FAILED";
 	public static final String STATE_NOT_CONNECTED = "CONNECT";
 	public static final String STATE_DISCONNECTED = "DISCONN";
+	public static final String STATE_SUCCESS = "SUCCESS";
 	
 	public static final String LOG_TIMESTAMP_CONNECT = "log_timestamp_connect";
 	public static final String LOG_TIMESTAMP_WRITE = "log_timestamp_write";

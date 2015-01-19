@@ -1,9 +1,14 @@
 package info.fshi.hydeparkdemo;
 
+import info.fshi.hydeparkdemo.data.QueueManager;
+import info.fshi.hydeparkdemo.data.TransactionData;
 import info.fshi.hydeparkdemo.listener.BTConnectButtonOnClickListener;
+import info.fshi.hydeparkdemo.location.DeviceLocationManager;
+import info.fshi.hydeparkdemo.location.DeviceLocationUpdateAlarm;
 import info.fshi.hydeparkdemo.network.BTCom;
 import info.fshi.hydeparkdemo.network.BTController;
 import info.fshi.hydeparkdemo.network.BTScanningAlarm;
+import info.fshi.hydeparkdemo.network.WebServerConnector;
 import info.fshi.hydeparkdemo.packet.BasicPacket;
 import info.fshi.hydeparkdemo.settings.BTSettings;
 import info.fshi.hydeparkdemo.utils.Constants;
@@ -41,12 +46,26 @@ public class DeviceListActivity extends Activity {
 	boolean mScanning = false;// bool to indicate if scanning
 	private static Context mContext;
 
+	private final static String TAG = "DeviceListActivity";
+	
 	// networking
 	private static BTController mBTController;
 
-	// list 
+	// device list 
 	private static ArrayList<Device> deviceList = new ArrayList<Device>();
 	private static DeviceListAdapter deviceListAdapter;
+
+	WebServerConnector mWebConnector;
+	
+	DeviceLocationManager mDeviceLocationManager;
+	
+	QueueManager myQueue;
+	
+	// bluetooth part
+	private BluetoothAdapter mBluetoothAdapter = null;
+	private final int REQUEST_BT_ENABLE = 1;
+	private final int REQUEST_BT_DISCOVERABLE = 11;
+	private int RESULT_BT_DISCOVERABLE_DURATION = 0;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -78,8 +97,12 @@ public class DeviceListActivity extends Activity {
 				deviceInfoDialog.show();
 			}
 		});
+		mWebConnector = new WebServerConnector();
+		mDeviceLocationManager = new DeviceLocationManager(mContext, mWebConnector);
+		startLocationReportingTask();
+		myQueue = new QueueManager();
+		mWebConnector.updateDeviceList();
 	}
-
 
 	private void registerBroadcastReceivers(){
 		// Register the bluetooth BroadcastReceiver
@@ -159,27 +182,21 @@ public class DeviceListActivity extends Activity {
 		super.onStart();
 	}
 
-
 	@Override
 	protected void onStop() {
 		// TODO Auto-generated method stub
 		super.onStop();
 	}
 
-
 	@Override
 	protected void onDestroy() {
 		// TODO Auto-generated method stub
+		Log.d(TAG, "onDestroy()");
 		super.onDestroy();
-		BTScanningAlarm.stopScanning(mContext);
+		stopAutoScanTask();
+		stopLocationReportingTask();
 		unregisterBroadcastReceivers();
 	}
-
-	// bluetooth part
-	private BluetoothAdapter mBluetoothAdapter = null;
-	private final int REQUEST_BT_ENABLE = 1;
-	private final int REQUEST_BT_DISCOVERABLE = 11;
-	private int RESULT_BT_DISCOVERABLE_DURATION = 0;
 
 	private void initBluetoothUtils(){
 		mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -205,82 +222,83 @@ public class DeviceListActivity extends Activity {
 	@SuppressLint("HandlerLeak") private class BTServiceHandler extends Handler {
 
 		private final String TAG = "BTServiceHandler";
+
+		private class ClientConnectionTask extends AsyncTask<String, Void, Void> {
+			protected Void doInBackground(String... strings) {
+				// init the counter
+				String MAC = strings[0];
+				int serverType = DeviceList.devices.get(MAC);
+				if(serverType == DeviceList.DEVICE_TYPE_RELAY){ // if device is a relay, exchange queue size first
+					JSONObject queueSize = new JSONObject();
+					try {
+						queueSize.put(BasicPacket.PACKET_TYPE, BasicPacket.PACKET_TYPE_QUEUE_SIZE);
+						queueSize.put(BasicPacket.PACKET_DATA, myQueue.getQueueLength());
+					} catch (JSONException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					mBTController.sendToBTDevice(MAC, queueSize);
+				}else if(serverType == DeviceList.DEVICE_TYPE_SINK){ // if device is a sink, send data
+					Log.d(Constants.TAG_ACT_TEST, "send data to sink");
+					mBTController.sendToBTDevice(MAC, myQueue.getFromQueue());
+				}else{ // if device is a sensor, do nothing here and wait for data
+				}
+				return null;
+			}
+		}
+		
+		private class ServerConnectionTask extends AsyncTask<String, Void, Void> {
+			protected Void doInBackground(String... strings) {
+				// init the counter
+				String MAC = strings[0];
+				int myType = DeviceList.devices.get(mBluetoothAdapter.getAddress());
+				if(myType == DeviceList.DEVICE_TYPE_RELAY){ // if my device is a relay, exchange queue size
+					JSONObject queueSize = new JSONObject();
+					try {
+						queueSize.put(BasicPacket.PACKET_TYPE, BasicPacket.PACKET_TYPE_QUEUE_SIZE);
+						queueSize.put(BasicPacket.PACKET_DATA, myQueue.getQueueLength());
+					} catch (JSONException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					mBTController.sendToBTDevice(MAC, queueSize);
+				}else if(myType == DeviceList.DEVICE_TYPE_SENSOR){ // if my device is a sensor, send data
+					Log.d(Constants.TAG_ACT_TEST, "send data to relay " + myQueue.getQueueLength());
+					mBTController.sendToBTDevice(MAC, myQueue.getFromQueue());
+				}else{ // if device is a sink, do nothing here and wait for data
+				}
+				return null;
+			}
+		}
+		
 		@Override
 		public void handleMessage(Message msg) {
 			Bundle b = msg.getData();
 			String MAC = b.getString(BTCom.BT_DEVICE_MAC);
 			switch(msg.what){
-			case BTCom.BT_DATA:
-				JSONObject json;
-				int type;
-				try {
-					json = new JSONObject(b.getString(BTCom.BT_DATA_CONTENT));
-					type = json.getInt(BasicPacket.PACKET_TYPE);
-					switch(type){
-					case BasicPacket.PACKET_TYPE_SENSOR_READING: // sensor reading data received
-						Log.d(TAG, "receive sensor readings " + json.getString(BasicPacket.PACKET_DATA));
-						deviceListAdapter.setDeviceMessage(MAC, json.getString(BasicPacket.PACKET_DATA));
-						JSONObject sensorReadingAck = new JSONObject();
-						try {
-							sensorReadingAck.put(BasicPacket.PACKET_TYPE, BasicPacket.PACKET_TYPE_SENSOR_READING_ACK);
-						} catch (JSONException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						mBTController.sendToBTDevice(MAC, sensorReadingAck);
-						break;
-					case BasicPacket.PACKET_TYPE_SENSOR_READING_ACK: // acknowledge sensor reading data
-						Log.d(TAG, "receive sensor reading ack");
-						mBTController.stopConnection(MAC);
-						break;
-					case BasicPacket.PACKET_TYPE_SENSOR_REQUEST: // request for sensor reading
-						Log.d(TAG, "receive sensor readings request, send sensor reading");
-						JSONObject sensorReading = new JSONObject();
-						try {
-							sensorReading.put(BasicPacket.PACKET_TYPE, BasicPacket.PACKET_TYPE_SENSOR_READING);
-							sensorReading.put(BasicPacket.PACKET_DATA, "tempature: 100, humidity: 100, this is for test purpose with a very long message");
-						} catch (JSONException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						mBTController.sendToBTDevice(MAC, sensorReading);
-						break;
-					default:
-						break;
-					}
-				} catch (JSONException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				break;
 			case BTCom.BT_CLIENT_ALREADY_CONNECTED:
 			case BTCom.BT_CLIENT_CONNECTED:
-				Log.d(TAG, "client connected");
-				// update main UI (current listview)
-				Log.d(Constants.TAG_ACT_TEST, "send sensor reading request");
-				JSONObject sensorReadingRequset = new JSONObject();
-				try {
-					sensorReadingRequset.put(BasicPacket.PACKET_TYPE, BasicPacket.PACKET_TYPE_SENSOR_REQUEST);
-				} catch (JSONException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				mBTController.sendToBTDevice(MAC, sensorReadingRequset);
-				deviceListAdapter.updateRetryBackoff(MAC, false);
 				deviceListAdapter.setDeviceAction(MAC, BTCom.BT_CLIENT_CONNECTED);
 				deviceListAdapter.notifyDataSetChanged();
+				Log.d(TAG, "client connected");
+				// update main UI (current listview)
+				new ClientConnectionTask().execute(MAC);
 				break;
 			case BTCom.BT_CLIENT_CONNECT_FAILED:
 				Log.d(Constants.TAG_ACT_TEST, "client failed");
 				if(deviceListAdapter.canRetry(MAC)){
 					Log.d(TAG, "retry to connect to " + MAC);
-					mBTController.connectBTServer(deviceListAdapter.getDevice(MAC).btDevice.btRawDevice, Constants.BT_CLIENT_TIMEOUT);
+					mBTController.connectBTServer(deviceListAdapter.getDevice(MAC).btRawDevice, Constants.BT_CLIENT_TIMEOUT);
 				}
 				else{
-					deviceListAdapter.updateRetryBackoff(MAC, true);
 					deviceListAdapter.setDeviceAction(MAC, BTCom.BT_CLIENT_CONNECT_FAILED);
 					deviceListAdapter.notifyDataSetChanged();
 				}
+				break;
+			case BTCom.BT_SUCCESS: // triggered by receiver
+				Log.d(Constants.TAG_ACT_TEST, "success");
+				deviceListAdapter.setDeviceAction(MAC, BTCom.BT_SUCCESS);
+				deviceListAdapter.notifyDataSetChanged();
 				break;
 			case BTCom.BT_DISCONNECTED:
 				Log.d(Constants.TAG_ACT_TEST, "disconnected");
@@ -289,9 +307,48 @@ public class DeviceListActivity extends Activity {
 				break;
 			case BTCom.BT_SERVER_CONNECTED:
 				Log.d(TAG, "server connected");
-				deviceListAdapter.updateRetryBackoff(MAC, false);
-				deviceListAdapter.setDeviceAction(MAC, BTCom.BT_CLIENT_CONNECTED);
+				deviceListAdapter.setDeviceAction(MAC, BTCom.BT_SERVER_CONNECTED);
 				deviceListAdapter.notifyDataSetChanged();
+				// mainly used for test, in the real case, client is always a relay
+				new ServerConnectionTask().execute(MAC);
+				break;
+			case BTCom.BT_DATA:
+				JSONObject json;
+				int type;
+				try{
+					json = new JSONObject(b.getString(BTCom.BT_DATA_CONTENT));
+					type = json.getInt(BasicPacket.PACKET_TYPE);
+					switch(type){
+					case BasicPacket.PACKET_TYPE_QUEUE_SIZE: // sensor reading data received
+						Log.d(TAG, "receive queue size " + json.getInt(BasicPacket.PACKET_DATA));
+						int queueDiff = (myQueue.getQueueLength() - json.getInt(BasicPacket.PACKET_DATA)) / 2;
+						if(queueDiff > 0){
+							mBTController.sendToBTDevice(MAC, myQueue.getFromQueue(queueDiff));
+						}else if(queueDiff == 0){
+							mBTController.stopConnection(MAC);
+						}
+						break;
+					default:
+						break;
+					}
+				}catch (JSONException e) {
+					// TODO Auto-generated catch block
+					// receive a raw string data
+					String data = b.getString(BTCom.BT_DATA_CONTENT);
+					Log.d(TAG, "old queue size " + myQueue.getQueueLength());
+					myQueue.appendToQueue(data);
+					deviceListAdapter.setDeviceMessage(MAC, "receive queue size : " + data.length());
+					Log.d(TAG, "new queue size " + myQueue.getQueueLength());
+					// prepare data for server
+					TransactionData txData = new TransactionData();
+					txData.senderAddr = MAC;
+					txData.receiverAddr = mBluetoothAdapter.getAddress();
+					txData.packetSize = data.length();
+					txData.cost = data.length() * 1.5;
+					txData.timestamp = System.currentTimeMillis();
+					mWebConnector.reportTransactionData(txData);
+					mBTController.stopConnection(MAC);
+				}
 				break;
 			default:
 				break;
@@ -316,40 +373,40 @@ public class DeviceListActivity extends Activity {
 				// Get the BluetoothDevice object from the Intent
 				BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 				String deviceMac = device.getAddress();
-				if(!devicesFoundStringArray.contains(deviceMac)){
-					devicesFoundStringArray.add(deviceMac);
-					Log.d(Constants.TAG_APPLICATION, "get a device : " + String.valueOf(deviceMac));
-					/*
-					 * -30dBm = Awesome
-					 * -60dBm = Good
-					 * -80dBm = OK
-					 * -90dBm = Bad
-					 */
-					short rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, (short) 0);
+				if(DeviceList.devices.containsKey(deviceMac)){ // only respond when a device is in the list
+					if(!devicesFoundStringArray.contains(deviceMac)){
+						devicesFoundStringArray.add(deviceMac);
+						Log.d(Constants.TAG_APPLICATION, "get a device : " + String.valueOf(deviceMac));
+						/*
+						 * -30dBm = Awesome
+						 * -60dBm = Good
+						 * -80dBm = OK
+						 * -90dBm = Bad
+						 */
+						short rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, (short) 0);
 
-					int index = deviceListAdapter.deviceIndex(deviceMac);
-					if (index < 0){ // device not exist
-						BTDevice btDevice = new BTDevice(device);
-						btDevice.rssi = rssi;
-						btDevice.name = device.getName();
-						btDevice.connState = Constants.STATE_CLIENT_UNCONNECTED;
-						btDevice.btConnect = new BTConnectButtonOnClickListener(btDevice, mBTController);
-						Device newDevice = new Device();
-						newDevice.btDevice = btDevice;
-						deviceList.add(newDevice);
-					}
-					else{ // device already found
-						Device myDevice = deviceListAdapter.getItem(index);
-						myDevice.btDevice.rssi = rssi;
-						myDevice.btDevice.resetRetryCounter();
-						myDevice.btDevice.name = device.getName();
-						if(myDevice.btDevice.connState != Constants.STATE_CLIENT_CONNECTED){
-							myDevice.btDevice.connState = Constants.STATE_CLIENT_UNCONNECTED;
+						int index = deviceListAdapter.deviceIndex(deviceMac);
+						if (index < 0){ // device not exist
+							Device btDevice = new Device(device);
+							btDevice.rssi = rssi;
+							btDevice.name = device.getName();
+							btDevice.connState = Constants.STATE_CLIENT_UNCONNECTED;
+							btDevice.btConnect = new BTConnectButtonOnClickListener(btDevice, mBTController);
+							deviceList.add(btDevice);
 						}
-						myDevice.btDevice.btConnect = new BTConnectButtonOnClickListener(myDevice.btDevice, mBTController);
+						else{ // device already found
+							Device myDevice = deviceListAdapter.getItem(index);
+							myDevice.rssi = rssi;
+							myDevice.resetRetryCounter();
+							myDevice.name = device.getName();
+							if(myDevice.connState != Constants.STATE_CLIENT_CONNECTED){
+								myDevice.connState = Constants.STATE_CLIENT_UNCONNECTED;
+							}
+							myDevice.btConnect = new BTConnectButtonOnClickListener(myDevice, mBTController);
+						}
+						deviceListAdapter.sortList();
+						deviceListAdapter.notifyDataSetChanged();
 					}
-					deviceListAdapter.sortList();
-					deviceListAdapter.notifyDataSetChanged();
 				}
 			}
 			else if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
@@ -359,8 +416,8 @@ public class DeviceListActivity extends Activity {
 					//a new scan has been started
 					Log.d(Constants.TAG_APPLICATION, "Discovery process has been started: " + String.valueOf(System.currentTimeMillis()));
 					for (Device device : deviceList){
-						if(device.btDevice.connState != Constants.STATE_CLIENT_CONNECTED){
-							device.btDevice.connState = Constants.STATE_CLIENT_OUTDATED;
+						if(device.connState != Constants.STATE_CLIENT_CONNECTED){
+							device.connState = Constants.STATE_CLIENT_OUTDATED;
 							deviceListAdapter.notifyDataSetChanged();
 						}
 					}
@@ -375,23 +432,22 @@ public class DeviceListActivity extends Activity {
 					mScanning = false;
 					invalidateOptionsMenu();
 					Log.d(Constants.TAG_APPLICATION, "Discovery process has been stopped: " + String.valueOf(System.currentTimeMillis()));
-					new ReadSensorData().execute();
+					new ExchangeData().execute();
 				}
 			}
 		}
 	};
 
 	/**
-	 * exchange neighbor table
+	 * exchange sensor data
 	 * @author fshi
 	 *
 	 */
-	private class ReadSensorData extends AsyncTask<Void, Void, Void> {
+	private class ExchangeData extends AsyncTask<Void, Void, Void> {
 		protected Void doInBackground(Void... voids) {
 			// init the counter
-
 			for(Device device : deviceListAdapter.getConnectableDevices()){
-				mBTController.connectBTServer(device.btDevice.btRawDevice, Constants.BT_CLIENT_TIMEOUT);
+				mBTController.connectBTServer(device.btRawDevice, Constants.BT_CLIENT_TIMEOUT);
 			}
 			return null;
 		}
@@ -435,6 +491,17 @@ public class DeviceListActivity extends Activity {
 
 	private void stopAutoScanTask() {
 		BTScanningAlarm.stopScanning(mContext);
+	}
+	
+	/**
+	 * start periodic location report
+	 */
+	private void startLocationReportingTask() {
+		new DeviceLocationUpdateAlarm(mContext, mDeviceLocationManager);
+	}
+
+	private void stopLocationReportingTask() {
+		DeviceLocationUpdateAlarm.stopReporting(mContext);
 	}
 
 }

@@ -70,8 +70,6 @@ public class BTController {
 		mBTHelper.send(mac, data);
 	}
 
-	
-	
 	/**
 	 * stop connection
 	 * @param mac
