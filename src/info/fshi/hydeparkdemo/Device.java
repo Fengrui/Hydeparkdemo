@@ -2,7 +2,6 @@ package info.fshi.hydeparkdemo;
 
 import info.fshi.hydeparkdemo.utils.Constants;
 import android.bluetooth.BluetoothDevice;
-import android.util.Log;
 import android.view.View.OnClickListener;
 
 public class Device {
@@ -14,7 +13,7 @@ public class Device {
 	int retryCounter;
 	String message = null;
 	
-	private final static String TAG = "BT Device";
+	private final static String TAG = "Device";
 	
 	/**
 	 * init a self-defined bluetooth device using android bluetooth object

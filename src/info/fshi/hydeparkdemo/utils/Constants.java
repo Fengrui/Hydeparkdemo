@@ -5,10 +5,11 @@ import info.fshi.hydeparkdemo.R;
 
 public abstract class Constants {
 	
-	public static final boolean DEBUG = true;
+	public static final boolean DEBUG = false;
 	public static final int INIT_QUEUE_SIZE = 8000000;
 	
-	public static final long WEB_LOCATION_REPORT_INTERVAL = 60000;
+	public static final long WEB_LOCATION_REPORT_INTERVAL = 10 * 60 * 1000; // 10 minutes
+	public static final long WEB_LOCATION_DEVICE_LIST_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
 	
 	public static final double LOCATION_UPDATE_SENSITIVITY = 0.00001;
 	

@@ -109,7 +109,6 @@ public class WebServerConnector {
 			HttpClient httpclient = new DefaultHttpClient();
 			HttpGet requestTypeList = new HttpGet(Constants.WEB_SERVER_TYPELIST_ADDR);
 		    try {
-		        
 		    	HttpResponse response = httpclient.execute(requestTypeList);
 		    	JSONObject json = new JSONObject(EntityUtils.toString(response.getEntity()));
 		    	Iterator<String> keysIterator = json.keys();
@@ -143,6 +142,7 @@ public class WebServerConnector {
 		    	HttpResponse response = httpclient.execute(requestDeviceList);
 		    	JSONObject json = new JSONObject(EntityUtils.toString(response.getEntity()));
 		    	Iterator<String> keysIterator = json.keys();
+		    	DeviceList.init();
 		    	while (keysIterator.hasNext()) 
 		    	{
 		    	        String mac = (String)keysIterator.next();
@@ -161,7 +161,7 @@ public class WebServerConnector {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} finally {
-				requestTypeList.abort();
+				requestDeviceList.abort();
 			}
 			return null;
 		}

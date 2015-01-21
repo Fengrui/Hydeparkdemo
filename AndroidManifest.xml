@@ -43,6 +43,10 @@
             android:name=".location.DeviceLocationUpdateAlarm"
             android:enabled="true" >
         </receiver>
+        <receiver
+            android:name=".DeviceListUpdateAlarm"
+            android:enabled="true" >
+        </receiver>
     </application>
 
 </manifest>

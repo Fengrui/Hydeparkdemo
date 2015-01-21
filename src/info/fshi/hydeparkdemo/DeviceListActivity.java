@@ -100,8 +100,8 @@ public class DeviceListActivity extends Activity {
 		mWebConnector = new WebServerConnector();
 		mDeviceLocationManager = new DeviceLocationManager(mContext, mWebConnector);
 		startLocationReportingTask();
+		startDeviceListUpdateTask();
 		myQueue = new QueueManager();
-		mWebConnector.updateDeviceList();
 	}
 
 	private void registerBroadcastReceivers(){
@@ -195,6 +195,7 @@ public class DeviceListActivity extends Activity {
 		super.onDestroy();
 		stopAutoScanTask();
 		stopLocationReportingTask();
+		stopDeviceListUpdateTask();
 		unregisterBroadcastReceivers();
 	}
 
@@ -504,4 +505,16 @@ public class DeviceListActivity extends Activity {
 		DeviceLocationUpdateAlarm.stopReporting(mContext);
 	}
 
+	/**
+	 * start update device list
+	 */
+	private void startDeviceListUpdateTask() {
+		new DeviceListUpdateAlarm(mContext, mWebConnector);
+	}
+
+	private void stopDeviceListUpdateTask() {
+		DeviceLocationUpdateAlarm.stopReporting(mContext);
+	}
+
+	
 }
