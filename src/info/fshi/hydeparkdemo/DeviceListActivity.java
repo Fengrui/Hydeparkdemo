@@ -15,6 +15,7 @@ import info.fshi.hydeparkdemo.utils.Constants;
 import info.fshi.hydeparkdemo.utils.SharedPreferencesUtil;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -224,11 +225,21 @@ public class DeviceListActivity extends Activity {
 
 		private final String TAG = "BTServiceHandler";
 
-		private class ClientConnectionTask extends AsyncTask<String, Void, Void> {
-			protected Void doInBackground(String... strings) {
+		// wrapper class
+		class Result
+		{
+		    public int length;
+		    public String MAC;
+		}
+		
+		private class ClientConnectionTask extends AsyncTask<String, Void, Result> {
+			
+			protected Result doInBackground(String... strings) {
 				// init the counter
 				String MAC = strings[0];
-				int serverType = DeviceList.devices.get(MAC);
+				Result re = new Result();
+				re.MAC = MAC;
+				int serverType = DeviceList.devices.get(MAC.toUpperCase(Locale.ENGLISH));
 				if(serverType == DeviceList.DEVICE_TYPE_RELAY){ // if device is a relay, exchange queue size first
 					JSONObject queueSize = new JSONObject();
 					try {
@@ -241,18 +252,29 @@ public class DeviceListActivity extends Activity {
 					mBTController.sendToBTDevice(MAC, queueSize);
 				}else if(serverType == DeviceList.DEVICE_TYPE_SINK){ // if device is a sink, send data
 					Log.d(Constants.TAG_ACT_TEST, "send data to sink");
+					re.length = myQueue.getQueueLength();
 					mBTController.sendToBTDevice(MAC, myQueue.getFromQueue());
 				}else{ // if device is a sensor, do nothing here and wait for data
 				}
-				return null;
+				return re;
+			}
+
+			@Override
+			protected void onPostExecute(Result re) {
+				// TODO Auto-generated method stub
+				if(re.length > 0){
+					Toast.makeText(mContext, "send " + re.length + " bytes data to " + re.MAC, Toast.LENGTH_LONG).show();
+				}
 			}
 		}
 		
-		private class ServerConnectionTask extends AsyncTask<String, Void, Void> {
-			protected Void doInBackground(String... strings) {
+		private class ServerConnectionTask extends AsyncTask<String, Void, Result> {
+			protected Result doInBackground(String... strings) {
 				// init the counter
 				String MAC = strings[0];
-				int myType = DeviceList.devices.get(mBluetoothAdapter.getAddress());
+				Result re = new Result();
+				re.MAC = MAC;
+				int myType = DeviceList.devices.get(mBluetoothAdapter.getAddress().toUpperCase(Locale.ENGLISH));
 				if(myType == DeviceList.DEVICE_TYPE_RELAY){ // if my device is a relay, exchange queue size
 					JSONObject queueSize = new JSONObject();
 					try {
@@ -265,10 +287,19 @@ public class DeviceListActivity extends Activity {
 					mBTController.sendToBTDevice(MAC, queueSize);
 				}else if(myType == DeviceList.DEVICE_TYPE_SENSOR){ // if my device is a sensor, send data
 					Log.d(Constants.TAG_ACT_TEST, "send data to relay " + myQueue.getQueueLength());
+					re.length = myQueue.getQueueLength();
 					mBTController.sendToBTDevice(MAC, myQueue.getFromQueue());
 				}else{ // if device is a sink, do nothing here and wait for data
 				}
-				return null;
+				return re;
+			}
+			
+			@Override
+			protected void onPostExecute(Result re) {
+				// TODO Auto-generated method stub
+				if(re.length > 0){
+					Toast.makeText(mContext, "send " + re.length + " bytes data to " + re.MAC, Toast.LENGTH_LONG).show();
+				}
 			}
 		}
 		
@@ -325,6 +356,7 @@ public class DeviceListActivity extends Activity {
 						int queueDiff = (myQueue.getQueueLength() - json.getInt(BasicPacket.PACKET_DATA)) / 2;
 						if(queueDiff > 0){
 							mBTController.sendToBTDevice(MAC, myQueue.getFromQueue(queueDiff));
+							Toast.makeText(mContext, "send " + queueDiff + " bytes data to " + MAC, Toast.LENGTH_LONG).show();
 						}else if(queueDiff == 0){
 							mBTController.stopConnection(MAC);
 						}
@@ -339,6 +371,7 @@ public class DeviceListActivity extends Activity {
 					Log.d(TAG, "old queue size " + myQueue.getQueueLength());
 					myQueue.appendToQueue(data);
 					deviceListAdapter.setDeviceMessage(MAC, "receive queue size : " + data.length());
+					Toast.makeText(mContext, "receive " + data.length() + " bytes data from " + MAC, Toast.LENGTH_LONG).show();
 					Log.d(TAG, "new queue size " + myQueue.getQueueLength());
 					// prepare data for server
 					TransactionData txData = new TransactionData();
@@ -374,10 +407,10 @@ public class DeviceListActivity extends Activity {
 				// Get the BluetoothDevice object from the Intent
 				BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
 				String deviceMac = device.getAddress();
-				if(DeviceList.devices.containsKey(deviceMac)){ // only respond when a device is in the list
+				Log.d(Constants.TAG_APPLICATION, "get a device : " + String.valueOf(deviceMac));
+				if(DeviceList.devices.containsKey(deviceMac.toUpperCase(Locale.ENGLISH))){ // only respond when a device is in the list
 					if(!devicesFoundStringArray.contains(deviceMac)){
 						devicesFoundStringArray.add(deviceMac);
-						Log.d(Constants.TAG_APPLICATION, "get a device : " + String.valueOf(deviceMac));
 						/*
 						 * -30dBm = Awesome
 						 * -60dBm = Good

@@ -6,7 +6,7 @@ import info.fshi.hydeparkdemo.R;
 public abstract class Constants {
 	
 	public static final boolean DEBUG = false;
-	public static final int INIT_QUEUE_SIZE = 8000000;
+	public static final int INIT_QUEUE_SIZE = 8000;
 	
 	public static final long WEB_LOCATION_REPORT_INTERVAL = 10 * 60 * 1000; // 10 minutes
 	public static final long WEB_LOCATION_DEVICE_LIST_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes

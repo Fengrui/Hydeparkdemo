@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -147,7 +148,7 @@ public class WebServerConnector {
 		    	{
 		    	        String mac = (String)keysIterator.next();
 		    	        String type = json.getString(mac);
-		    	        DeviceList.devices.put(mac, Integer.parseInt(type));
+		    	        DeviceList.devices.put(mac.toUpperCase(Locale.ENGLISH), Integer.parseInt(type));
 		    	        Log.d(TAG, mac + ":" + type);
 		    	}
 		    } catch (ClientProtocolException e) {
